@@ -181,9 +181,9 @@
     </aside>
 
     <!-- Editor & Terminal Wrapper - Dynamic Flex Direction -->
-    <div id="workspace-wrapper" class="flex-1 flex flex-col overflow-hidden gap-3 h-full">
+    <div id="workspace-wrapper" class="flex-1 flex flex-col overflow-hidden h-full">
         <!-- Editor Section -->
-        <section id="editor-section" class="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-300 dark:border-gray-700 overflow-hidden min-h-[300px] transition-colors duration-200">
+        <section id="editor-section" class="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-300 dark:border-gray-700 overflow-hidden transition-colors duration-200" style="flex: 1 1 50%;">
             <!-- Tabs Header -->
             <div class="bg-gray-200 dark:bg-gray-900 flex items-end px-1 pt-1 overflow-x-auto select-none border-b border-gray-300 dark:border-gray-700" id="tabs-container">
                 <button id="btn-add-file" class="ml-1 mb-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400 transition" title="New File">
@@ -197,8 +197,11 @@
         </div>
     </section>
 
+    <!-- Resizer Splitter -->
+    <div id="resizer" class="bg-gray-300 dark:bg-gray-700 hover:bg-red-400 dark:hover:bg-red-600 transition-colors z-20 flex-shrink-0 shadow-sm" style="width: 100%; height: 6px; cursor: row-resize;"></div>
+
     <!-- Output Terminal Section -->
-    <section id="terminal-section" class="flex-1 flex flex-col bg-white dark:bg-[#1e1e1e] rounded-lg shadow border border-gray-300 dark:border-gray-800 overflow-hidden min-h-[200px] lg:max-w-[45%] transition-colors duration-200">
+    <section id="terminal-section" class="flex-1 flex flex-col bg-white dark:bg-[#1e1e1e] rounded-lg shadow border border-gray-300 dark:border-gray-800 overflow-hidden transition-colors duration-200" style="flex: 1 1 50%;">
         <div class="bg-gray-100 dark:bg-[#2d2d2d] border-b border-gray-300 dark:border-black px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 flex justify-between items-center shadow-sm transition-colors duration-200">
             <div class="flex items-center">
                 <svg class="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -281,6 +284,8 @@
         let pyodide = null;
         let isMdPreviewOpen = false;
         let uploadTargetFolder = ''; // Tracks target folder for specific uploads
+        let collapsedFolders = new Set(); // Tracks closed folders in the sidebar
+        let isResizing = false; // Tracks if the splitter is being dragged
 
         // =====================================================================
         // TEACHER CONFIGURATION: PRELOADED FILES
@@ -436,7 +441,23 @@
             let sortedIndices = files.map((f, i) => ({...f, index: i}))
                                      .sort((a, b) => a.name.localeCompare(b.name));
 
+            // Filter out files that are hidden inside collapsed folders
+            let visibleFiles = [];
             sortedIndices.forEach((file) => {
+                const parts = file.name.split('/');
+                let isHidden = false;
+                let currentPath = '';
+                for (let i = 0; i < parts.length - 1; i++) {
+                    currentPath += (i === 0 ? '' : '/') + parts[i];
+                    if (collapsedFolders.has(currentPath)) {
+                        isHidden = true;
+                        break;
+                    }
+                }
+                if (!isHidden) visibleFiles.push(file);
+            });
+
+            visibleFiles.forEach((file) => {
                 const depth = file.name.split('/').length - 1;
                 const displayName = file.name.split('/').pop() || file.name;
                 
@@ -454,7 +475,12 @@
                 leftSpan.className = 'flex items-center gap-1.5 truncate';
                 
                 if (file.type === 'folder') {
-                    leftSpan.innerHTML = `<svg class="w-4 h-4 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg> <span class="truncate">${displayName}</span>`;
+                    const isCollapsed = collapsedFolders.has(file.name);
+                    const chevron = isCollapsed 
+                        ? `<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>`
+                        : `<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>`;
+
+                    leftSpan.innerHTML = `${chevron} <svg class="w-4 h-4 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg> <span class="truncate font-medium">${displayName}</span>`;
                     
                     // Drop target setup for folders
                     div.ondragover = (e) => {
@@ -567,7 +593,14 @@
                 div.appendChild(actionsDiv);
 
                 div.onclick = () => {
-                    if (file.type !== 'folder') switchTab(file.index);
+                    if (file.type === 'folder') {
+                        // Toggle folder collapse state
+                        if (collapsedFolders.has(file.name)) collapsedFolders.delete(file.name);
+                        else collapsedFolders.add(file.name);
+                        renderTabs();
+                    } else {
+                        switchTab(file.index);
+                    }
                 };
                 fileTree.appendChild(div);
             });
@@ -924,23 +957,76 @@
         function applyLayout() {
             const wrapper = document.getElementById('workspace-wrapper');
             const terminal = document.getElementById('terminal-section');
-            wrapper.className = "flex-1 flex overflow-hidden gap-3 h-full"; // reset base classes
+            const editorSec = document.getElementById('editor-section');
+            const resizer = document.getElementById('resizer');
+            
+            wrapper.className = "flex-1 flex overflow-hidden h-full"; // reset base classes
+            
+            // Re-balance sizes to exactly 50/50 when switching layouts
+            editorSec.style.flex = "1 1 50%";
+            terminal.style.flex = "1 1 50%";
             
             if (layoutMode === 'right') {
-                wrapper.classList.add('flex-col', 'lg:flex-row'); // responsive right
-                terminal.classList.remove('lg:max-w-none');
-                terminal.classList.add('lg:max-w-[45%]', 'xl:max-w-[40%]');
+                wrapper.classList.add('flex-row'); // Enforce strictly side-by-side
+                resizer.style.cursor = 'col-resize';
+                resizer.style.width = '6px';
+                resizer.style.height = '100%';
             } else if (layoutMode === 'bottom') {
                 wrapper.classList.add('flex-col'); // Top: editor, Bottom: terminal
-                terminal.classList.remove('lg:max-w-[45%]', 'xl:max-w-[40%]');
-                terminal.classList.add('lg:max-w-none');
+                resizer.style.cursor = 'row-resize';
+                resizer.style.width = '100%';
+                resizer.style.height = '6px';
             } else if (layoutMode === 'top') {
                 wrapper.classList.add('flex-col-reverse'); // Top: terminal, Bottom: editor
-                terminal.classList.remove('lg:max-w-[45%]', 'xl:max-w-[40%]');
-                terminal.classList.add('lg:max-w-none');
+                resizer.style.cursor = 'row-resize';
+                resizer.style.width = '100%';
+                resizer.style.height = '6px';
             }
             setTimeout(() => editor.resize(), 100);
         }
+
+        // --- Splitter / Resizer Logic ---
+        const resizerElement = document.getElementById('resizer');
+        const workspaceWrapper = document.getElementById('workspace-wrapper');
+        const editorSection = document.getElementById('editor-section');
+        const terminalSection = document.getElementById('terminal-section');
+
+        resizerElement.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = resizerElement.style.cursor;
+            e.preventDefault(); // Prevents text highlighting while dragging
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            
+            const rect = workspaceWrapper.getBoundingClientRect();
+            
+            if (layoutMode === 'right') {
+                let percentage = ((e.clientX - rect.left) / rect.width) * 100;
+                percentage = Math.max(10, Math.min(percentage, 90)); // Clamp between 10% and 90%
+                editorSection.style.flex = `0 0 ${percentage}%`;
+                terminalSection.style.flex = `1 1 0%`;
+            } else if (layoutMode === 'bottom') {
+                let percentage = ((e.clientY - rect.top) / rect.height) * 100;
+                percentage = Math.max(10, Math.min(percentage, 90));
+                editorSection.style.flex = `0 0 ${percentage}%`;
+                terminalSection.style.flex = `1 1 0%`;
+            } else if (layoutMode === 'top') {
+                let percentage = ((rect.bottom - e.clientY) / rect.height) * 100;
+                percentage = Math.max(10, Math.min(percentage, 90));
+                editorSection.style.flex = `0 0 ${percentage}%`;
+                terminalSection.style.flex = `1 1 0%`;
+            }
+            editor.resize(); // Inform Ace editor of bounds change
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = '';
+            }
+        });
 
         // Theme Toggle
         document.getElementById('btn-theme').onclick = () => toggleTheme(!isDarkMode);
