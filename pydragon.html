@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyDragon</title>
+
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class', // Enable class-based dark mode
+        }
+    </script>
+
+    <!-- Ace Editor for code editing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ext-language_tools.min.js"></script>
+
+    <!-- Pyodide for running Python in the browser -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+
+    <!-- Marked for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        /* Ensure the editor container takes full space relative to parent */
+        #editor {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            font-size: 16px;
+        }
+
+        /* Terminal output styling */
+        .terminal-output {
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        /* Custom scrollbar for a sleeker look */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.8); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(107, 114, 128, 1); }
+        
+        .dark ::-webkit-scrollbar-thumb { background: rgba(75, 85, 99, 0.8); }
+        .dark ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 1); }
+
+        /* File Tab styles */
+        .file-tab {
+            cursor: pointer;
+            transition: background-color 0.2s;
+            user-select: none;
+        }
+        .file-tab.active {
+            background-color: #ffffff;
+            border-top: 2px solid #991b1b; /* red-800 */
+            color: #111827;
+        }
+        .dark .file-tab.active {
+            background-color: #1f2937; /* gray-800 */
+            border-top: 2px solid #ef4444; /* red-500 */
+            color: #f9fafb;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 h-screen flex flex-col font-sans overflow-hidden transition-colors duration-200">
+
+<!-- Header / Navigation Bar -->
+<header class="bg-red-900 dark:bg-red-950 text-white p-3 shadow-lg flex flex-col sm:flex-row justify-between items-center z-10 gap-3">
+    <div class="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
+        <div class="flex items-center space-x-3">
+            <!-- Python Logo SVG -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 118 118" fill="none">
+                <path d="M58.74 3C42.06 3 39 5.86 39 16.48V25.26H78.36V34H33.48C18.66 34 14 42.63 14 56.63C14 71.05 19.38 78.4 34.34 78.4H40.23V65.85C40.23 52.82 51.05 42 64.08 42H83.82C93.42 42 100.8 35.15 100.8 25.55V16.48C100.8 5.48 93.37 3 58.74 3ZM46.96 11.08C49.9 11.08 52.34 13.52 52.34 16.46C52.34 19.4 49.9 21.84 46.96 21.84C44.02 21.84 41.58 19.4 41.58 16.46C41.58 13.52 44.02 11.08 46.96 11.08Z" fill="#387EB8"/>
+                <path d="M58.74 115C75.42 115 78.48 112.14 78.48 101.52V92.74H39.12V84H84C98.82 84 103.48 75.37 103.48 61.37C103.48 46.95 98.1 39.6 83.14 39.6H77.25V52.15C77.25 65.18 66.43 76 53.4 76H33.66C24.06 76 16.68 82.85 16.68 92.45V101.52C16.68 112.52 24.11 115 58.74 115ZM70.52 106.92C67.58 106.92 65.14 104.48 65.14 101.54C65.14 98.6 67.58 96.16 70.52 96.16C73.46 96.16 75.9 98.6 75.9 101.54C75.9 104.48 73.46 106.92 70.52 106.92Z" fill="#FFE873"/>
+            </svg>
+            <div>
+                <h1 class="text-xl font-bold leading-tight">PyDragon</h1>
+                <p class="text-red-200 text-xs">Collierville Edition</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tools & Options Bar -->
+    <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 bg-black/20 p-1.5 rounded-lg w-full sm:w-auto">
+        <!-- Hidden input for file upload -->
+        <input type="file" id="file-upload" class="hidden" multiple accept=".py,.txt,.md">
+        <!-- Hidden input for folder upload -->
+        <input type="file" id="folder-upload" class="hidden" webkitdirectory directory multiple>
+        <!-- Hidden input for workspace restore -->
+        <input type="file" id="restore-upload" class="hidden" accept=".pydragon,.json">
+        
+        <button id="btn-toggle-sidebar" title="Toggle File Explorer" class="p-1.5 hover:bg-white/20 rounded transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path></svg>
+        </button>
+        <button id="btn-clean-env" title="Clean Workspace (Blank)" class="p-1.5 hover:bg-white/20 rounded transition">
+            <svg class="w-5 h-5 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143z"></path></svg>
+        </button>
+
+        <div class="w-px h-6 bg-white/30 mx-0.5"></div> <!-- Separator -->
+
+        <button id="btn-upload" title="Upload Files" class="p-1.5 hover:bg-white/20 rounded transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+        </button>
+        <button id="btn-upload-folder" title="Upload Folder" class="p-1.5 hover:bg-white/20 rounded transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+        </button>
+
+        <div class="w-px h-6 bg-white/30 mx-0.5"></div> <!-- Separator -->
+
+        <button id="btn-backup" title="Backup Workspace (.pydragon)" class="p-1.5 hover:bg-white/20 rounded transition text-blue-300">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
+        </button>
+        <button id="btn-restore" title="Restore Workspace" class="p-1.5 hover:bg-white/20 rounded transition text-green-300">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+        </button>
+
+        <div class="w-px h-6 bg-white/30 mx-0.5"></div> <!-- Separator -->
+
+        <button id="btn-download" title="Download Active File" class="p-1.5 hover:bg-white/20 rounded transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+        </button>
+        <button id="btn-download-txt" title="Download as .txt" class="p-1.5 hover:bg-white/20 rounded transition relative">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <span class="absolute bottom-0 right-0 text-[8px] font-bold bg-gray-800 text-white px-0.5 rounded leading-none">TXT</span>
+        </button>
+        
+        <div class="w-px h-6 bg-white/30 mx-0.5"></div> <!-- Separator -->
+
+        <button id="btn-save" title="Save Progress Locally" class="p-1.5 hover:bg-white/20 rounded transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+        </button>
+        <button id="btn-clear-storage" title="Clear Local Memory & Reload" class="p-1.5 hover:bg-red-500/20 text-red-200 hover:text-red-100 rounded transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+        </button>
+        
+        <div class="w-px h-6 bg-white/30 mx-0.5"></div> <!-- Separator -->
+        
+        <button id="btn-md-preview" title="Toggle Markdown Preview" class="p-1.5 hover:bg-white/20 rounded transition hidden">
+            <svg class="w-5 h-5 text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+        </button>
+        <button id="btn-layout" title="Toggle Layout (Right/Bottom/Top)" class="p-1.5 hover:bg-white/20 rounded transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+        </button>
+        <button id="btn-theme" title="Toggle Dark/Light Mode" class="p-1.5 hover:bg-white/20 rounded transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+        </button>
+    </div>
+
+    <!-- Execution Controls -->
+    <div class="flex space-x-2 w-full sm:w-auto">
+        <button id="run-btn" disabled class="flex-1 sm:flex-none bg-green-500 hover:bg-green-600 text-white font-semibold py-1.5 px-4 rounded shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center">
+            <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/></svg> 
+            <span id="run-text">Loading...</span>
+        </button>
+        <button id="clear-btn" class="flex-1 sm:flex-none bg-red-700 hover:bg-red-800 border border-red-600 text-white font-medium py-1.5 px-3 rounded shadow-sm transition-all duration-200 flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+        </button>
+    </div>
+</header>
+
+<!-- Main Workspace Layout -->
+<main class="flex-1 flex flex-row overflow-hidden p-2 sm:p-3 gap-3 h-full">
+    
+    <!-- File Explorer Sidebar (Always left, full height) -->
+    <aside id="sidebar" class="w-48 lg:w-52 flex-shrink-0 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-300 dark:border-gray-700 overflow-hidden transition-all duration-200 h-full">
+        <div class="bg-gray-200 dark:bg-gray-900 border-b border-gray-300 dark:border-gray-700 px-3 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 flex justify-between items-center">
+            <span>Explorer</span>
+            <div class="flex gap-1">
+                <button id="btn-sidebar-add" title="New File/Folder" class="hover:text-red-600 dark:hover:text-red-400 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg></button>
+            </div>
+        </div>
+        <div id="file-tree" class="flex-1 overflow-y-auto p-2 text-sm text-gray-700 dark:text-gray-300 space-y-0.5">
+            <!-- Tree injected here by JS -->
+        </div>
+    </aside>
+
+    <!-- Editor & Terminal Wrapper - Dynamic Flex Direction -->
+    <div id="workspace-wrapper" class="flex-1 flex flex-col overflow-hidden gap-3 h-full">
+        <!-- Editor Section -->
+        <section id="editor-section" class="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-300 dark:border-gray-700 overflow-hidden min-h-[300px] transition-colors duration-200">
+            <!-- Tabs Header -->
+            <div class="bg-gray-200 dark:bg-gray-900 flex items-end px-1 pt-1 overflow-x-auto select-none border-b border-gray-300 dark:border-gray-700" id="tabs-container">
+                <button id="btn-add-file" class="ml-1 mb-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400 transition" title="New File">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                </button>
+            </div>
+        
+        <div class="flex-1 relative">
+            <div id="editor" class="z-10"></div>
+            <div id="md-preview-container" class="hidden absolute inset-0 bg-white dark:bg-gray-800 p-6 overflow-y-auto prose prose-slate dark:prose-invert max-w-none z-20"></div>
+        </div>
+    </section>
+
+    <!-- Output Terminal Section -->
+    <section id="terminal-section" class="flex-1 flex flex-col bg-white dark:bg-[#1e1e1e] rounded-lg shadow border border-gray-300 dark:border-gray-800 overflow-hidden min-h-[200px] lg:max-w-[45%] transition-colors duration-200">
+        <div class="bg-gray-100 dark:bg-[#2d2d2d] border-b border-gray-300 dark:border-black px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 flex justify-between items-center shadow-sm transition-colors duration-200">
+            <div class="flex items-center">
+                <svg class="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                Terminal Output
+            </div>
+            <div class="flex space-x-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+            </div>
+        </div>
+        
+        <div class="flex-1 p-3 overflow-y-auto bg-gray-50 dark:bg-[#1e1e1e] transition-colors duration-200" id="output-container">
+            <pre id="output" class="terminal-output text-gray-800 dark:text-gray-100 text-sm md:text-[15px]"></pre>
+        </div>
+    </section>
+    </div>
+</main>
+
+<!-- Toasts Container -->
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- New File Modal -->
+<div id="filename-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity">
+    <div class="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-xl w-96 max-w-[90%] transform transition-all">
+        <h3 class="text-lg font-bold mb-3 text-gray-900 dark:text-white">Create New Item</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Supported extensions: .py, .md, .txt</p>
+        <div class="flex gap-4 mb-3 text-sm text-gray-800 dark:text-gray-200">
+            <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="item-type" value="file" checked class="accent-red-600"> File</label>
+            <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="item-type" value="folder" class="accent-red-600"> Folder</label>
+        </div>
+        <input type="text" id="filename-input" class="w-full border border-gray-300 dark:border-gray-600 p-2 rounded bg-gray-50 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-800 mb-4" placeholder="e.g. src/script.py or utils">
+        <div class="flex justify-end gap-2">
+            <button id="btn-modal-cancel" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-gray-800 dark:text-white transition">Cancel</button>
+            <button id="btn-modal-create" class="px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded transition">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Clear Memory Modal -->
+<div id="confirm-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity">
+    <div class="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-xl w-96 max-w-[90%] transform transition-all">
+        <h3 class="text-lg font-bold mb-2 text-gray-900 dark:text-white">Clear All Memory?</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">Are you sure you want to clear all local saves? This will delete all your files and reset the IDE completely.</p>
+        <div class="flex justify-end gap-2">
+            <button id="btn-confirm-cancel" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-gray-800 dark:text-white transition">Cancel</button>
+            <button id="btn-confirm-clear" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition">Yes, Clear</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Clean Env Modal -->
+<div id="clean-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity">
+    <div class="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-xl w-96 max-w-[90%] transform transition-all">
+        <h3 class="text-lg font-bold mb-2 text-gray-900 dark:text-white">Start Clean Environment?</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-5">This will remove all current files and open a blank workspace. Save a backup first if you want to keep your work!</p>
+        <div class="flex justify-end gap-2">
+            <button id="btn-clean-cancel" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded text-gray-800 dark:text-white transition">Cancel</button>
+            <button id="btn-clean-confirm" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition">Start Clean</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Defensively override native dialogs to prevent browser blocking.
+    // Pyodide defaults to window.prompt() for the Python input() function,
+    // which triggers the "this page says" popup. We intercept it here.
+    window.alert = function(msg) { console.log("Alert suppressed:", msg); };
+    window.confirm = function(msg) { return false; };
+    window.prompt = function(msg) { 
+        throw new Error("The input() function is not supported in this web IDE. Please hard-code your variables instead.");
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // --- Core State ---
+        let files = [];
+        let activeTabIndex = 0;
+        let layoutMode = 'bottom'; // Default to bottom
+        let isDarkMode = false;
+        let pyodide = null;
+        let isMdPreviewOpen = false;
+        let uploadTargetFolder = ''; // Tracks target folder for specific uploads
+
+        // =====================================================================
+        // TEACHER CONFIGURATION: PRELOADED FILES
+        // Modify this array to preload files and folders for your students!
+        // =====================================================================
+        const defaultFiles = [
+            {
+                name: 'instructions.md',
+                type: 'file',
+                content: '# Assignment: Circle Geometry\n\nWelcome to your assignment!\n\n**Your Task:**\nComplete the `calculate_area` function inside `main.py`.\n\n### Steps:\n1. Open `main.py` from the Explorer.\n2. Read the comments and write your code to calculate the area of a circle.\n3. Note: A helper variable `pi` is provided in `helper.py`!\n4. Click **Run Active File** to test your code.\n5. Once your output is correct, click the **Download** button to save and submit your `.py` file.'
+            },
+            {
+                name: 'main.py',
+                type: 'file',
+                content: 'import helper\n\ndef calculate_area(radius):\n    # TODO: Use helper.pi and the radius to calculate the area of a circle.\n    # Formula: Area = pi * radius^2\n    \n    pass # Replace this line with your code\n\n\n# --- Test your function below ---\nresult = calculate_area(5)\nprint(f"The area of a circle with radius 5 is: {result}")\n'
+            },
+            {
+                name: 'helper.py',
+                type: 'file',
+                content: '# A preloaded helper module to demonstrate imports\npi = 3.14159\n'
+            }
+        ];
+        // =====================================================================
+
+        // Initialize state from local storage or set defaults
+        function loadInitialState() {
+            const savedData = localStorage.getItem('dragon_ide_files');
+            if (savedData) {
+                try {
+                    files = JSON.parse(savedData);
+                    // Legacy migration: ensure all items have a type
+                    files.forEach(f => { if (!f.type) f.type = 'file'; });
+                } catch (e) {
+                    files = JSON.parse(JSON.stringify(defaultFiles)); // Deep copy to prevent reference issues
+                }
+            } else {
+                files = JSON.parse(JSON.stringify(defaultFiles)); // Deep copy
+            }
+
+            const savedTheme = localStorage.getItem('dragon_ide_theme');
+            if (savedTheme === 'dark') toggleTheme(true);
+            else toggleTheme(false);
+
+            const savedLayout = localStorage.getItem('dragon_ide_layout');
+            if (savedLayout) {
+                layoutMode = savedLayout;
+                applyLayout();
+            }
+        }
+
+        // --- Editor Initialization ---
+        const editor = ace.edit("editor");
+        editor.setOptions({
+            fontSize: "14pt",
+            showPrintMargin: false,
+            enableBasicAutocompletion: true,
+            enableLiveAutocompletion: true
+        });
+
+        // UI Element References
+        const tabsContainer = document.getElementById('tabs-container');
+        const outputElement = document.getElementById("output");
+        const outputContainer = document.getElementById("output-container");
+        const runBtn = document.getElementById("run-btn");
+        const runText = document.getElementById("run-text");
+        const modal = document.getElementById('filename-modal');
+        const filenameInput = document.getElementById('filename-input');
+        const fileTree = document.getElementById('file-tree');
+
+        // Setup File Explorer root drop zone (move back to root)
+        fileTree.ondragover = (e) => { e.preventDefault(); };
+        fileTree.ondrop = (e) => {
+            e.preventDefault();
+            const sourceName = e.dataTransfer.getData('text/plain');
+            // Only process if we actually drag something that is inside a folder
+            if (!sourceName || !sourceName.includes('/')) return;
+            
+            const baseName = sourceName.split('/').pop();
+            const newPrefix = baseName;
+            
+            if (files.some(f => f.name === newPrefix)) {
+                showToast("An item with that name already exists in the root.", "error");
+                return;
+            }
+            files.forEach(f => {
+                if (f.name === sourceName) f.name = newPrefix;
+                else if (f.name.startsWith(sourceName + '/')) {
+                    f.name = f.name.replace(sourceName + '/', newPrefix + '/');
+                }
+            });
+            renderTabs();
+        };
+
+        // --- Notification System ---
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-2 rounded shadow-lg text-white text-sm transition-all duration-300 transform translate-y-0 opacity-100 ${type === 'error' ? 'bg-red-600' : type === 'info' ? 'bg-blue-600' : 'bg-green-600'}`;
+            toast.innerText = message;
+            document.getElementById('toast-container').appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- File Management ---
+        function renderTabs() {
+            // Remove existing tab elements (keep the Add button)
+            const addBtn = document.getElementById('btn-add-file');
+            tabsContainer.innerHTML = '';
+
+            files.forEach((file, index) => {
+                if (file.type === 'folder') return; // Folders don't get tabs
+
+                const tab = document.createElement('div');
+                tab.className = `file-tab flex items-center px-3 py-1.5 text-sm border-r border-gray-300 dark:border-gray-700 rounded-t-md ${index === activeTabIndex ? 'active' : 'text-gray-600 dark:text-gray-400 bg-gray-200 dark:bg-gray-900'}`;
+                
+                // Set click handler to switch tab
+                tab.onclick = (e) => {
+                    if(!e.target.classList.contains('close-btn')) switchTab(index);
+                };
+
+                const iconMap = { '.py': 'text-blue-500', '.md': 'text-yellow-500', '.txt': 'text-gray-500' };
+                const ext = file.name.substring(file.name.lastIndexOf('.'));
+                const iconColor = iconMap[ext] || 'text-gray-500';
+
+                tab.innerHTML = `
+                    <svg class="w-3.5 h-3.5 mr-1.5 ${iconColor}" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+                    <span>${file.name}</span>
+                    ${files.length > 1 ? `<button class="close-btn ml-2 text-gray-400 hover:text-red-500 focus:outline-none">&times;</button>` : ''}
+                `;
+
+                if (files.length > 1) {
+                    tab.querySelector('.close-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        closeTab(index);
+                    };
+                }
+
+                tabsContainer.appendChild(tab);
+            });
+            if (addBtn) tabsContainer.appendChild(addBtn);
+            renderSidebar();
+        }
+
+        function renderSidebar() {
+            if (!fileTree) return;
+            fileTree.innerHTML = '';
+            
+            // Map items with their original index and sort alphabetically
+            let sortedIndices = files.map((f, i) => ({...f, index: i}))
+                                     .sort((a, b) => a.name.localeCompare(b.name));
+
+            sortedIndices.forEach((file) => {
+                const depth = file.name.split('/').length - 1;
+                const displayName = file.name.split('/').pop() || file.name;
+                
+                const div = document.createElement('div');
+                div.style.paddingLeft = `${depth * 12 + 4}px`;
+                div.className = `group cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 px-1 py-1 rounded truncate flex items-center justify-between gap-1.5 ${activeTabIndex === file.index && file.type !== 'folder' ? 'bg-gray-200 dark:bg-gray-700 font-medium' : ''}`;
+                
+                // Drag & Drop Setup
+                div.draggable = true;
+                div.ondragstart = (e) => {
+                    e.dataTransfer.setData('text/plain', file.name);
+                };
+
+                const leftSpan = document.createElement('div');
+                leftSpan.className = 'flex items-center gap-1.5 truncate';
+                
+                if (file.type === 'folder') {
+                    leftSpan.innerHTML = `<svg class="w-4 h-4 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path></svg> <span class="truncate">${displayName}</span>`;
+                    
+                    // Drop target setup for folders
+                    div.ondragover = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        div.classList.add('bg-blue-200', 'dark:bg-blue-800');
+                    };
+                    div.ondragleave = (e) => {
+                        div.classList.remove('bg-blue-200', 'dark:bg-blue-800');
+                    };
+                    div.ondrop = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        div.classList.remove('bg-blue-200', 'dark:bg-blue-800');
+                        
+                        const sourceName = e.dataTransfer.getData('text/plain');
+                        if (!sourceName || sourceName === file.name || sourceName.startsWith(file.name + '/')) return;
+                        
+                        const baseName = sourceName.split('/').pop();
+                        const newPrefix = file.name + '/' + baseName;
+                        
+                        if (files.some(f => f.name === newPrefix)) {
+                            showToast("An item with that name already exists in the target folder.", "error");
+                            return;
+                        }
+
+                        files.forEach(f => {
+                            if (f.name === sourceName) f.name = newPrefix;
+                            else if (f.name.startsWith(sourceName + '/')) {
+                                f.name = f.name.replace(sourceName + '/', newPrefix + '/');
+                            }
+                        });
+                        renderTabs();
+                    };
+                } else {
+                    const ext = displayName.substring(displayName.lastIndexOf('.'));
+                    const iconMap = { '.py': 'text-blue-500', '.md': 'text-yellow-500', '.txt': 'text-gray-500' };
+                    const iconColor = iconMap[ext] || 'text-gray-500';
+                    leftSpan.innerHTML = `<svg class="w-4 h-4 ${iconColor} flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg> <span class="truncate">${displayName}</span>`;
+                }
+
+                // Action Buttons container
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'hidden group-hover:flex items-center gap-1.5 focus:outline-none flex-shrink-0';
+                
+                if (file.type === 'folder') {
+                    // Upload Button
+                    const upBtn = document.createElement('button');
+                    upBtn.className = 'text-gray-400 hover:text-blue-500 transition-colors';
+                    upBtn.title = 'Upload to this folder';
+                    upBtn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>';
+                    upBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        uploadTargetFolder = file.name;
+                        document.getElementById('file-upload').click();
+                    };
+                    actionsDiv.appendChild(upBtn);
+
+                    // Add Item Button
+                    const addBtn = document.createElement('button');
+                    addBtn.className = 'text-gray-400 hover:text-green-500 transition-colors';
+                    addBtn.title = 'New item in this folder';
+                    addBtn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>';
+                    addBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        modal.classList.remove('hidden');
+                        filenameInput.value = file.name + '/';
+                        filenameInput.focus();
+                    };
+                    actionsDiv.appendChild(addBtn);
+                }
+
+                // Delete button in sidebar
+                const delBtn = document.createElement('button');
+                delBtn.className = 'text-gray-400 hover:text-red-500 focus:outline-none transition-colors';
+                delBtn.title = 'Delete';
+                delBtn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
+                delBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const isOnlyFile = files.filter(f => f.type === 'file').length <= 1;
+                    if (isOnlyFile && file.type !== 'folder') {
+                        showToast("Cannot delete the last file.", "error");
+                        return;
+                    }
+                    
+                    if (file.type === 'folder') {
+                        // Delete folder and all its contents
+                        files = files.filter(f => f.name !== file.name && !f.name.startsWith(file.name + '/'));
+                    } else {
+                        // Delete single file
+                        const actualIndex = files.findIndex(f => f.name === file.name);
+                        if (actualIndex > -1) files.splice(actualIndex, 1);
+                    }
+
+                    // Fallback if we accidentally wiped all files
+                    if (files.filter(f => f.type === 'file').length === 0) {
+                        files.push({ name: 'main.py', content: '# New file', type: 'file' });
+                    }
+
+                    // Reset active tab to a safe file
+                    activeTabIndex = 0;
+                    while(files[activeTabIndex] && files[activeTabIndex].type === 'folder') activeTabIndex++;
+                    
+                    renderTabs();
+                    switchTab(activeTabIndex);
+                };
+                actionsDiv.appendChild(delBtn);
+
+                div.appendChild(leftSpan);
+                div.appendChild(actionsDiv);
+
+                div.onclick = () => {
+                    if (file.type !== 'folder') switchTab(file.index);
+                };
+                fileTree.appendChild(div);
+            });
+        }
+
+        function switchTab(index) {
+            // Do nothing if trying to switch to a folder index
+            if (files[index] && files[index].type === 'folder') return;
+            
+            // Save current editor content to active file
+            if (files[activeTabIndex] && files[activeTabIndex].type === 'file') {
+                files[activeTabIndex].content = editor.getValue();
+            }
+            
+            activeTabIndex = index;
+            const newFile = files[index];
+            editor.setValue(newFile.content, -1);
+            
+            const btnMdPreview = document.getElementById('btn-md-preview');
+            const previewContainer = document.getElementById('md-preview-container');
+            const editorDiv = document.getElementById('editor');
+
+            // Reset preview mode state when switching tabs
+            isMdPreviewOpen = false;
+            previewContainer.classList.add('hidden');
+            editorDiv.style.visibility = 'visible';
+
+            // Set syntax highlighting mode and preview toggle visibility
+            if (newFile.name.endsWith('.py')) {
+                editor.session.setMode("ace/mode/python");
+                btnMdPreview.classList.add('hidden');
+            }
+            else if (newFile.name.endsWith('.md')) {
+                editor.session.setMode("ace/mode/markdown");
+                btnMdPreview.classList.remove('hidden');
+            }
+            else {
+                editor.session.setMode("ace/mode/text");
+                btnMdPreview.classList.add('hidden');
+            }
+
+            renderTabs();
+        }
+
+        function closeTab(index) {
+            if (files.length <= 1) return; // Prevent closing last file
+            files.splice(index, 1);
+            if (activeTabIndex >= index && activeTabIndex > 0) {
+                activeTabIndex--;
+            }
+            switchTab(activeTabIndex); // Switch triggers render
+        }
+
+        // --- Modal & File Creation ---
+        document.getElementById('btn-add-file').onclick = () => {
+            modal.classList.remove('hidden');
+            filenameInput.value = '';
+            filenameInput.focus();
+        };
+        
+        document.getElementById('btn-sidebar-add').onclick = document.getElementById('btn-add-file').onclick;
+
+        document.getElementById('btn-modal-cancel').onclick = () => {
+            modal.classList.add('hidden');
+        };
+
+        document.getElementById('btn-modal-create').onclick = () => {
+            const itemType = document.querySelector('input[name="item-type"]:checked').value;
+            let name = filenameInput.value.trim();
+            if (!name) return;
+            
+            // Remove trailing slash if user accidentally typed it for a folder
+            if (itemType === 'folder' && name.endsWith('/')) {
+                name = name.slice(0, -1);
+            }
+
+            if (itemType === 'file' && !name.endsWith('.py') && !name.endsWith('.md') && !name.endsWith('.txt')) {
+                showToast("Only .py, .md, and .txt files are supported.", "error");
+                return;
+            }
+            if (files.some(f => f.name === name)) {
+                showToast(`${itemType === 'folder' ? 'Folder' : 'File'} already exists!`, "error");
+                return;
+            }
+            
+            if (files[activeTabIndex] && files[activeTabIndex].type === 'file') {
+                files[activeTabIndex].content = editor.getValue(); // save current
+            }
+            
+            if (itemType === 'folder') {
+                files.push({ name: name, type: 'folder' });
+                modal.classList.add('hidden');
+                renderTabs(); // will trigger renderSidebar
+            } else {
+                files.push({ name: name, content: name.endsWith('.py') ? '# New Python File\n' : '', type: 'file' });
+                activeTabIndex = files.length - 1;
+                modal.classList.add('hidden');
+                switchTab(activeTabIndex);
+            }
+        };
+
+        // --- Toolbar Actions ---
+
+        // Sidebar Toggle
+        document.getElementById('btn-toggle-sidebar').onclick = () => {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('hidden');
+            setTimeout(() => editor.resize(), 100);
+        };
+
+        // Clean Environment
+        const cleanModal = document.getElementById('clean-modal');
+        document.getElementById('btn-clean-env').onclick = () => {
+            cleanModal.classList.remove('hidden');
+        };
+        document.getElementById('btn-clean-cancel').onclick = () => {
+            cleanModal.classList.add('hidden');
+        };
+        document.getElementById('btn-clean-confirm').onclick = () => {
+            files = [{ name: 'main.py', content: '', type: 'file' }];
+            localStorage.setItem('dragon_ide_files', JSON.stringify(files));
+            activeTabIndex = 0;
+            renderTabs();
+            switchTab(0);
+            cleanModal.classList.add('hidden');
+            showToast("Clean environment ready!");
+        };
+
+        // Backup Workspace
+        document.getElementById('btn-backup').onclick = () => {
+            if (files[activeTabIndex] && files[activeTabIndex].type === 'file') {
+                files[activeTabIndex].content = editor.getValue();
+            }
+            const blob = new Blob([JSON.stringify(files, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `pydragon_backup_${date}.pydragon`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("Workspace backed up successfully!");
+        };
+
+        // Restore Workspace
+        const restoreUploadInput = document.getElementById('restore-upload');
+        document.getElementById('btn-restore').onclick = () => restoreUploadInput.click();
+        restoreUploadInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const parsed = JSON.parse(event.target.result);
+                    if (Array.isArray(parsed)) {
+                        files = parsed;
+                        localStorage.setItem('dragon_ide_files', JSON.stringify(files));
+                        activeTabIndex = 0;
+                        // Find first valid file to open, default to blank main if only folders
+                        while(files[activeTabIndex] && files[activeTabIndex].type === 'folder') activeTabIndex++;
+                        if (activeTabIndex >= files.length) {
+                            files.push({ name: 'main.py', content: '', type: 'file' });
+                            activeTabIndex = files.length - 1;
+                        }
+                        renderTabs();
+                        switchTab(activeTabIndex);
+                        showToast("Workspace restored successfully!");
+                    } else {
+                        showToast("Invalid backup file format.", "error");
+                    }
+                } catch (err) {
+                    showToast("Error reading backup file.", "error");
+                }
+            };
+            reader.readAsText(file);
+            restoreUploadInput.value = ""; // reset input
+        });
+        
+        // Save Locally
+        document.getElementById('btn-save').onclick = () => {
+            files[activeTabIndex].content = editor.getValue(); // sync editor
+            localStorage.setItem('dragon_ide_files', JSON.stringify(files));
+            showToast("Progress saved to your browser!");
+        };
+
+        // Clear Memory Modal Logic
+        const confirmModal = document.getElementById('confirm-modal');
+        document.getElementById('btn-clear-storage').onclick = () => {
+            confirmModal.classList.remove('hidden');
+        };
+        document.getElementById('btn-confirm-cancel').onclick = () => {
+            confirmModal.classList.add('hidden');
+        };
+        document.getElementById('btn-confirm-clear').onclick = () => {
+            localStorage.removeItem('dragon_ide_files');
+            localStorage.removeItem('dragon_ide_layout');
+            localStorage.removeItem('dragon_ide_theme');
+            showToast("Memory cleared. Reloading...");
+            setTimeout(() => location.reload(), 1000);
+        };
+
+        // Download Normal
+        document.getElementById('btn-download').onclick = () => {
+            const activeFile = files[activeTabIndex];
+            const content = editor.getValue();
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = activeFile.name;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`Downloaded ${activeFile.name}`);
+        };
+
+        // Download as TXT
+        document.getElementById('btn-download-txt').onclick = () => {
+            const activeFile = files[activeTabIndex];
+            const content = editor.getValue();
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            // Swap extension to .txt
+            let txtFilename = activeFile.name;
+            const lastDot = txtFilename.lastIndexOf('.');
+            if (lastDot !== -1) {
+                txtFilename = txtFilename.substring(0, lastDot) + '.txt';
+            } else {
+                txtFilename += '.txt';
+            }
+            
+            a.download = txtFilename;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast(`Downloaded as ${txtFilename}`);
+        };
+
+        // Markdown Preview Toggle
+        document.getElementById('btn-md-preview').onclick = () => {
+            const previewContainer = document.getElementById('md-preview-container');
+            const editorDiv = document.getElementById('editor');
+            
+            isMdPreviewOpen = !isMdPreviewOpen;
+            
+            if (isMdPreviewOpen) {
+                previewContainer.innerHTML = marked.parse(editor.getValue());
+                previewContainer.classList.remove('hidden');
+                editorDiv.style.visibility = 'hidden'; // Hide without detaching ace
+            } else {
+                previewContainer.classList.add('hidden');
+                editorDiv.style.visibility = 'visible';
+            }
+        };
+
+        // Upload
+        const fileUploadInput = document.getElementById('file-upload');
+        document.getElementById('btn-upload').onclick = () => {
+            uploadTargetFolder = ''; // Reset for main upload button
+            fileUploadInput.click();
+        };
+        fileUploadInput.addEventListener('change', (e) => {
+            const totalFiles = e.target.files.length;
+            let loadedCount = 0;
+            
+            for(let file of e.target.files) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const ext = file.name.substring(file.name.lastIndexOf('.'));
+                    if (['.py', '.txt', '.md'].includes(ext)) {
+                        // Use uploadTargetFolder if set from a sidebar folder button
+                        const finalName = uploadTargetFolder ? uploadTargetFolder + '/' + file.name : file.name;
+                        
+                        // Avoid duplicates
+                        const existingIdx = files.findIndex(f => f.name === finalName);
+                        if (existingIdx !== -1) {
+                            files[existingIdx].content = event.target.result;
+                        } else {
+                            files.push({ name: finalName, content: event.target.result, type: 'file' });
+                        }
+                    }
+                    
+                    loadedCount++;
+                    // Only switch tab and notify when all files have been read
+                    if (loadedCount === totalFiles) {
+                        uploadTargetFolder = ''; // Reset
+                        renderTabs(); // Ensure explorer refreshes to show new files in folders
+                        switchTab(files.length - 1); 
+                        showToast(`Uploaded ${totalFiles} file(s)`);
+                    }
+                };
+                reader.readAsText(file);
+            }
+            fileUploadInput.value = ""; // reset
+        });
+
+        // Folder Upload
+        const folderUploadInput = document.getElementById('folder-upload');
+        document.getElementById('btn-upload-folder').onclick = () => folderUploadInput.click();
+        folderUploadInput.addEventListener('change', (e) => {
+            const totalFiles = e.target.files.length;
+            if (totalFiles === 0) return;
+            let loadedCount = 0;
+            
+            for(let file of e.target.files) {
+                // webkitRelativePath contains the full folder structure!
+                const path = file.webkitRelativePath || file.name;
+                
+                // Implicitly create parent folder entries for the sidebar
+                const parts = path.split('/');
+                let currentDir = '';
+                for (let i = 0; i < parts.length - 1; i++) {
+                    currentDir += (i === 0 ? '' : '/') + parts[i];
+                    if (!files.some(f => f.name === currentDir)) {
+                        files.push({ name: currentDir, type: 'folder' });
+                    }
+                }
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const ext = path.substring(path.lastIndexOf('.'));
+                    if (['.py', '.txt', '.md'].includes(ext)) {
+                        const existingIdx = files.findIndex(f => f.name === path);
+                        if (existingIdx !== -1) {
+                            files[existingIdx].content = event.target.result;
+                        } else {
+                            files.push({ name: path, content: event.target.result, type: 'file' });
+                        }
+                    }
+                    loadedCount++;
+                    // Only switch tab and notify when all files have been read
+                    if (loadedCount === totalFiles) {
+                        renderTabs();
+                        showToast(`Uploaded folder with ${totalFiles} file(s)`);
+                    }
+                };
+                reader.readAsText(file);
+            }
+            folderUploadInput.value = ""; // reset
+        });
+
+        // Layout Toggle
+        document.getElementById('btn-layout').onclick = () => {
+            if (layoutMode === 'right') layoutMode = 'bottom';
+            else if (layoutMode === 'bottom') layoutMode = 'top';
+            else layoutMode = 'right';
+            
+            localStorage.setItem('dragon_ide_layout', layoutMode);
+            applyLayout();
+            showToast(`Layout changed to: ${layoutMode.charAt(0).toUpperCase() + layoutMode.slice(1)}`, 'info');
+        };
+
+        function applyLayout() {
+            const wrapper = document.getElementById('workspace-wrapper');
+            const terminal = document.getElementById('terminal-section');
+            wrapper.className = "flex-1 flex overflow-hidden gap-3 h-full"; // reset base classes
+            
+            if (layoutMode === 'right') {
+                wrapper.classList.add('flex-col', 'lg:flex-row'); // responsive right
+                terminal.classList.remove('lg:max-w-none');
+                terminal.classList.add('lg:max-w-[45%]', 'xl:max-w-[40%]');
+            } else if (layoutMode === 'bottom') {
+                wrapper.classList.add('flex-col'); // Top: editor, Bottom: terminal
+                terminal.classList.remove('lg:max-w-[45%]', 'xl:max-w-[40%]');
+                terminal.classList.add('lg:max-w-none');
+            } else if (layoutMode === 'top') {
+                wrapper.classList.add('flex-col-reverse'); // Top: terminal, Bottom: editor
+                terminal.classList.remove('lg:max-w-[45%]', 'xl:max-w-[40%]');
+                terminal.classList.add('lg:max-w-none');
+            }
+            setTimeout(() => editor.resize(), 100);
+        }
+
+        // Theme Toggle
+        document.getElementById('btn-theme').onclick = () => toggleTheme(!isDarkMode);
+
+        function toggleTheme(makeDark) {
+            isDarkMode = makeDark;
+            const html = document.documentElement;
+            if (isDarkMode) {
+                html.classList.add('dark');
+                editor.setTheme("ace/theme/tomorrow_night_eighties");
+                localStorage.setItem('dragon_ide_theme', 'dark');
+            } else {
+                html.classList.remove('dark');
+                editor.setTheme("ace/theme/chrome");
+                localStorage.setItem('dragon_ide_theme', 'light');
+            }
+        }
+
+
+        // --- Pyodide Execution Logic ---
+        function scrollOutputToBottom() {
+            outputContainer.scrollTop = outputContainer.scrollHeight;
+        }
+
+        function appendOutput(text, isError = false) {
+            const span = document.createElement("span");
+            span.textContent = text + "\n"; 
+            if (isError) span.className = "text-red-600 dark:text-red-400 font-bold";
+            outputElement.appendChild(span);
+            scrollOutputToBottom();
+        }
+
+        async function initPyodide() {
+            appendOutput("Loading Python 3.11 engine (Pyodide)... Please wait.", false);
+            try {
+                pyodide = await loadPyodide({
+                    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/",
+                    stdout: (msg) => appendOutput(msg, false),
+                    stderr: (msg) => appendOutput(msg, true) 
+                });
+                
+                outputElement.innerHTML = "";
+                appendOutput("Python environment successfully initialized!", false);
+                appendOutput("--------------------------------------------", false);
+                
+                runBtn.disabled = false;
+                runText.innerText = "Run Active File";
+            } catch (error) {
+                appendOutput("\nFailed to load Python engine:", true);
+                appendOutput(error.toString(), true);
+                runText.innerText = "Error Loading";
+            }
+        }
+
+        // Execute Run
+        runBtn.addEventListener("click", async () => {
+            if (!pyodide) return;
+            const activeFile = files[activeTabIndex];
+            
+            if (!activeFile.name.endsWith('.py')) {
+                showToast("Can only run .py files!", "error");
+                return;
+            }
+
+            // Sync current editor to state
+            activeFile.content = editor.getValue();
+            
+            runBtn.disabled = true;
+            runText.innerText = "Running...";
+            appendOutput(`\n>>> Running ${activeFile.name}...`, false);
+
+            try {
+                // 1. Sync ALL folders and files into Pyodide's virtual filesystem (allows imports)
+                const createdDirs = new Set();
+                for (let file of files) {
+                    // Reconstruct paths to ensure parent directories exist
+                    const pathParts = file.name.split('/');
+                    let currentDir = '';
+                    // If it's a folder, include the last part, if file, omit it.
+                    const loopLimit = pathParts.length - (file.type === 'folder' ? 0 : 1);
+                    
+                    for (let i = 0; i < loopLimit; i++) {
+                        currentDir += (i === 0 ? '' : '/') + pathParts[i];
+                        if (!createdDirs.has(currentDir)) {
+                            try { pyodide.FS.mkdir(currentDir); } catch(e) {} // Ignore if already exists
+                            createdDirs.add(currentDir);
+                        }
+                    }
+                    
+                    // Write the actual file data
+                    if (file.type === 'file') {
+                        pyodide.FS.writeFile('/' + file.name, file.content);
+                    }
+                }
+
+                // 2. Load packages if needed
+                await pyodide.loadPackagesFromImports(activeFile.content);
+                
+                // 3. Execute Active File
+                const result = await pyodide.runPythonAsync(activeFile.content);
+                
+                if (result !== undefined) {
+                    appendOutput(result.toString(), false);
+                }
+            } catch (error) {
+                appendOutput(error.toString(), true);
+            } finally {
+                runBtn.disabled = false;
+                runText.innerText = "Run Active File";
+                scrollOutputToBottom();
+            }
+        });
+
+        document.getElementById("clear-btn").addEventListener("click", () => {
+            outputElement.innerHTML = "";
+        });
+
+
+        // --- Startup Routine ---
+        loadInitialState();
+        switchTab(0); // Also triggers renderTabs
+        initPyodide();
+    });
+</script>
+</body>
+</html>
